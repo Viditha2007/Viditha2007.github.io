@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Correct Smart Rerouting Simulation</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <script>
+        // --- 1. CORRECTED AND LOGICAL DATA ---
+        const mapCenter = [17.418, 78.339]; // Centered on Financial District, Hyderabad
+
+        // Road network data representing highways and arterial roads
+        const roadLines = [
+            [[17.425, 78.330], [17.423, 78.335], [17.420, 78.340], [17.418, 78.345]], // Main East-West Highway
+            [[17.423, 78.335], [17.418, 78.336], [17.415, 78.338]], // Southward connecting road (The Detour)
+            [[17.415, 78.338], [17.416, 78.342], [17.418, 78.345]]  // Lower East-West road
+        ];
+
+        // Obstacles placed on these major roads
+        const obstacleData = [
+            { "type": "Barricade", "lat": 17.420, "lon": 78.340 }, // Placed squarely on the main highway
+            { "type": "Pothole", "lat": 17.416, "lon": 78.342 }     // Placed on the lower road
+        ];
+
+        // CORRECTED Vehicle paths
+        const vehicleData = [
+            {
+                // Car 1: Path is BLOCKED by the Barricade.
+                "path": [
+                    [17.425, 78.330], // Start
+                    [17.423, 78.335], // Travels to this intersection...
+                    // ...and then takes the detour because the next segment is blocked.
+                    [17.418, 78.336], // Detour path start
+                    [17.415, 78.338], // Detour path middle
+                    [17.416, 78.342], // Detour path end
+                    [17.418, 78.345]  // Rejoins original route destination
+                ],
+                "reroute_info": { "index": 1, "message": "Barricade ahead! Rerouting..." }
+            },
+            {
+                // Car 2: Path is CLEAR. It will not reroute.
+                "path": [
+                    [17.424, 78.329],
+                    [17.422, 78.334],
+                    [17.417, 78.335],
+                    [17.414, 78.337]
+                ],
+                "reroute_info": null
+            }
+        ];
+
+        // --- 2. MAP INITIALIZATION ---
+        const map = L.map('map').setView(mapCenter, 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // --- 3. DRAW MAP ELEMENTS ---
+        roadLines.forEach(line => L.polyline(line, { color: '#003366', weight: 5, opacity: 0.8 }).addTo(map));
+
+        const obstacleIcons = {
+            'Pothole': L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/64/183/183115.png', iconSize: [28, 28] }),
+            'Barricade': L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/64/8133/8133876.png', iconSize: [28, 28] })
+        };
+        obstacleData.forEach(obs => {
+            L.marker([obs.lat, obs.lon], { icon: obstacleIcons[obs.type] })
+             .addTo(map).bindPopup(<b>${obs.type}</b>);
+        });
+
+        // --- 4. CAR ANIMATION LOGIC ---
+        const carIcon = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/64/741/741407.png',
+            iconSize: [38, 38],
+            iconAnchor: [19, 19]
+        });
+
+        const carMarkers = [];
+        vehicleData.forEach((vehicle, index) => {
+            if (vehicle.path && vehicle.path.length > 0) {
+                const carMarker = L.marker(vehicle.path[0], {
+                    icon: carIcon
+                }).addTo(map).bindPopup(Vehicle #${index + 1});
+                
+                carMarkers.push({
+                    marker: carMarker,
+                    data: vehicle,
+                    currentIndex: 0,
+                    rerouted: false
+                });
+            }
+        });
+
+        function animateCars() {
+            carMarkers.forEach((car) => {
+                car.currentIndex = (car.currentIndex + 1) % car.data.path.length;
+                
+                const newPosition = car.data.path[car.currentIndex];
+                car.marker.setLatLng(newPosition);
+
+                // Show reroute message at the exact point of diversion
+                if (car.data.reroute_info && car.currentIndex === car.data.reroute_info.index && !car.rerouted) {
+                    car.marker.bindPopup(car.data.reroute_info.message).openPopup();
+                    car.rerouted = true;
+                }
+            });
+        }
+
+        // Slow animation speed for clarity
+        setInterval(animateCars, 500);
+    </script>
+</body>
+</html>
